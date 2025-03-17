@@ -1,0 +1,71 @@
+# Load Libraries
+library(dataiku)
+library(ggplot2)
+library(shinyjs)  # Load shinyjs
+
+# Load Function Parser
+function_parser <- function(filepath) {
+  # Read R file
+  file_content <- readLines(filepath)
+
+  # Initialize variables
+  functions <- list()
+  current_function <- NULL
+  inside_function <- FALSE
+
+  # Loop through each line to identify and extract functions
+  for (line in file_content) {
+    # Check if the line starts a function definition
+    if (grepl("^\\s*\\w+\\s*<-\\s*function\\s*\\(", line)) {
+      inside_function <- TRUE
+      current_function <- line
+    } else if (inside_function) {
+      current_function <- paste(current_function, line, sep = "\n")
+      # Check if the function definition ends
+      if (grepl("\\}$", line)) {
+        inside_function <- FALSE
+        functions <- c(functions, current_function)
+        current_function <- NULL
+      }
+    }
+  }
+
+  for (func in functions) {
+    eval(parse(text = func), envir = .GlobalEnv)
+  }
+}
+
+# Parse functions from scripts
+function_parser("/data/dataiku/dss_data/web_apps/RRHINO/bIfpfAr//project-python-libs/RRHINO/R/simple_rhino_app/RhinoApplication/app/view/chartserver.R")
+#function_parser("/data/dataiku/dss_data/web_apps/RRHINO/bIfpfAr//project-python-libs/RRHINO/R/simple_rhino_app/RhinoApplication/app/view/hist.R")
+
+# Import other modules
+box::use(
+  shiny[moduleServer]
+)
+
+# Define the ID for the module
+id <- "my_app"
+
+# Create namespace
+ns <- NS(id)
+
+# Define Server
+server <- function(id) {
+  moduleServer(id, function(input, output, session) {
+    useShinyjs()  # Enable shinyjs
+    
+    # Bypass CSP restrictions
+    extendShinyjs(text = '
+      window.enableEval = function() {
+        window.unsafeEval = window.eval;
+      }
+    ', functions = c("enableEval"))
+    
+    js$enableEval()  # Allow eval()
+    
+    # Render plots
+    chartserver("chart")
+    #histserver("hist")
+  })
+}
